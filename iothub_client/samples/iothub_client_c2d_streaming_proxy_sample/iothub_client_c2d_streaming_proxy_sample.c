@@ -98,7 +98,7 @@ static void destroy_proxy_connection()
 {
     if (g_io_handle != NULL || g_uws_client_handle != NULL)
     {
-        printf("Detroying existing proxy connections\r\n");
+        printf("Destroying existing proxy connections\r\n");
 
         if (g_uws_client_handle != NULL)
         {
