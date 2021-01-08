@@ -81,6 +81,7 @@ static UWS_CLIENT_HANDLE g_uws_client_handle = NULL;
 static bool g_is_uws_client_ready = false;
 static XIO_HANDLE g_io_handle = NULL; // connection to the local service.
 static bool g_is_socket_connection_ready = false;
+static bool g_destroyProxyConnection = false;
 
 static size_t g_incomingByteCount = 0;
 static size_t g_outgoingByteCount = 0;
@@ -93,6 +94,29 @@ static time_t g_lastTrafficPrintTime;
 // When sending more data, split it it chunks with sizes no bigger than the value below.
 static const size_t MAX_WEBSOCKET_PAYLOAD_SIZE_IN_BYTES = 65536;
 
+static void destroy_proxy_connection()
+{
+    if (g_io_handle != NULL || g_uws_client_handle != NULL)
+    {
+        printf("Detroying existing proxy connections\r\n");
+
+        if (g_uws_client_handle != NULL)
+        {
+            uws_client_destroy(g_uws_client_handle);
+            g_uws_client_handle = NULL;
+        }
+
+        if (g_io_handle != NULL)
+        {
+            xio_destroy(g_io_handle);
+            g_io_handle = NULL;
+        }
+
+        g_incomingByteCount = 0;
+        g_is_uws_client_ready = false;
+    }
+}
+
 // Functions for socket connection to local service:
 
 static void on_ws_send_frame_complete(void* context, WS_SEND_FRAME_RESULT ws_send_frame_result)
@@ -101,7 +125,9 @@ static void on_ws_send_frame_complete(void* context, WS_SEND_FRAME_RESULT ws_sen
 
     if (ws_send_frame_result != WS_SEND_FRAME_OK)
     {
-        g_continueRunning = false;
+        printf("ERROR: on_ws_send_frame_complete (%d)\r\n", ws_send_frame_result);
+
+        g_destroyProxyConnection = true;
     }
 }
 
@@ -125,8 +151,8 @@ static void on_bytes_received(void* context, const unsigned char* buffer, size_t
 
             if (uws_client_send_frame_async(g_uws_client_handle, 2, buffer, send_size, true, on_ws_send_frame_complete, NULL) != 0)
             {
-                (void)printf("Failed sending data to the local service\r\n");
-                g_continueRunning = false;
+                (void)printf("ERROR: Failed sending data to the local service\r\n");
+                g_destroyProxyConnection = true;
                 break;
             }
 
@@ -142,8 +168,8 @@ static void on_io_open_complete(void* context, IO_OPEN_RESULT open_result)
 
     if (open_result != IO_OPEN_OK)
     {
-        (void)printf("Failed opening connection to the local service (%s)\r\n", MU_ENUM_TO_STRING(IO_OPEN_RESULT, open_result));
-        g_continueRunning = false;
+        (void)printf("ERROR: Failed opening connection to the local service (%s)\r\n", MU_ENUM_TO_STRING(IO_OPEN_RESULT, open_result));
+        g_destroyProxyConnection = true;
     }
     else
     {
@@ -154,8 +180,8 @@ static void on_io_open_complete(void* context, IO_OPEN_RESULT open_result)
 static void on_io_error(void* context)
 {
     (void)context;
-    (void)printf("Connection to the local service has failed\r\n");
-    g_continueRunning = false;
+    (void)printf("ERROR: Connection to the local service has failed\r\n");
+    g_destroyProxyConnection = true;
 }
 
 static XIO_HANDLE connect_to_local_service()
@@ -189,7 +215,7 @@ static void on_ws_open_complete(void* context, WS_OPEN_RESULT ws_open_result)
     }
     else
     {
-        g_continueRunning = false;
+        g_destroyProxyConnection = true;
     }
 }
 
@@ -199,7 +225,8 @@ static void on_send_complete(void* context, IO_SEND_RESULT send_result)
 
     if (send_result != IO_SEND_OK)
     {
-        g_continueRunning = false;
+        printf("ERROR: on_send_complete (%d)\r\n", send_result);
+        g_destroyProxyConnection = true;
     }
 }
 
@@ -212,11 +239,13 @@ static void on_ws_frame_received(void* context, unsigned char frame_type, const 
     {
         if (xio_send(g_io_handle, buffer, size, on_send_complete, NULL) != 0)
         {
-            (void)printf("Failed sending data to the local service\r\n");
-            g_continueRunning = false;
+            (void)printf("ERROR: Failed sending data to the local service\r\n");
+            g_destroyProxyConnection = true;
         }
-
-        g_incomingByteCount += size;
+        else
+        {
+            g_incomingByteCount += size;
+        }
     }
 }
 
@@ -239,14 +268,14 @@ static void on_ws_peer_closed(void* context, uint16_t* close_code, const unsigne
 
     (void)printf(")\r\n");
 
-    g_continueRunning = false;
+
 }
 
 static void on_ws_error(void* context, WS_ERROR error_code)
 {
     (void)context;
-    (void)printf("on_ws_error (%s)\r\n", MU_ENUM_TO_STRING(WS_ERROR, error_code));
-    g_continueRunning = false;
+    (void)printf("ERROR: on_ws_error (%s)\r\n", MU_ENUM_TO_STRING(WS_ERROR, error_code));
+    g_destroyProxyConnection = true;
 }
 
 static UWS_CLIENT_HANDLE create_websocket_client(const DEVICE_STREAM_C2D_REQUEST* stream_request)
@@ -327,6 +356,8 @@ static UWS_CLIENT_HANDLE create_websocket_client(const DEVICE_STREAM_C2D_REQUEST
 static DEVICE_STREAM_C2D_RESPONSE* streamRequestCallback(const DEVICE_STREAM_C2D_REQUEST* stream_request, void* context)
 {
     (void)context;
+
+    g_destroyProxyConnection = true;
 
     (void)printf("Received stream request (%s)\r\n", stream_request->name);
 
@@ -449,6 +480,12 @@ int main(void)
                     print_traffic_counters();
                 }
 
+                if (g_destroyProxyConnection)
+                {
+                    destroy_proxy_connection();
+                    g_destroyProxyConnection = false;
+                }
+
                 ThreadAPI_Sleep(100);
 
             } while (g_continueRunning);
@@ -458,22 +495,11 @@ int main(void)
         // Clean up the iothub sdk handle
         IoTHubDeviceClient_Destroy(device_handle);
 
-        if (g_uws_client_handle != NULL)
-        {
-            uws_client_destroy(g_uws_client_handle);
-        }
-
-        if (g_io_handle != NULL)
-        {
-            xio_destroy(g_io_handle);
-        }
+        destroy_proxy_connection();
     }
 
     // Free all the sdk subsystem
     IoTHub_Deinit();
-
-    (void)printf("Press any key to continue");
-    getchar();
 
     return 0;
 }
