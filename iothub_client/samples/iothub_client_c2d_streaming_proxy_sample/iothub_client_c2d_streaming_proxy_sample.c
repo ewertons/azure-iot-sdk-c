@@ -358,6 +358,8 @@ static DEVICE_STREAM_C2D_RESPONSE* streamRequestCallback(const DEVICE_STREAM_C2D
     (void)context;
 
     g_destroyProxyConnection = true;
+    
+   	ThreadAPI_Sleep(100);
 
     (void)printf("Received stream request (%s)\r\n", stream_request->name);
 
