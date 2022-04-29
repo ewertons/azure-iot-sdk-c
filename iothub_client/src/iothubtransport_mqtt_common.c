@@ -972,46 +972,51 @@ static STRING_HANDLE addPropertiesTouMqttMessage(IOTHUB_MESSAGE_HANDLE iothub_me
 //
 static int publishTelemetryMsg(PMQTTTRANSPORT_HANDLE_DATA transport_data, MQTT_MESSAGE_DETAILS_LIST* mqttMsgEntry, const unsigned char* payload, size_t len)
 {
-    int result;
-    STRING_HANDLE msgTopic = addPropertiesTouMqttMessage(mqttMsgEntry->iotHubMessageEntry->messageHandle, STRING_c_str(transport_data->topic_MqttEvent), transport_data->auto_url_encode_decode);
-    if (msgTopic == NULL)
-    {
-        LogError("Failed adding properties to mqtt message");
-        result = MU_FAILURE;
-    }
-    else
-    {
-        MQTT_MESSAGE_HANDLE mqttMsg = mqttmessage_create_in_place(mqttMsgEntry->packet_id, STRING_c_str(msgTopic), DELIVER_AT_LEAST_ONCE, payload, len);
-        if (mqttMsg == NULL)
-        {
-            LogError("Failed creating mqtt message");
-            result = MU_FAILURE;
-        }
-        else
-        {
-            if (tickcounter_get_current_ms(transport_data->msgTickCounter, &mqttMsgEntry->msgPublishTime) != 0)
-            {
-                LogError("Failed retrieving tickcounter info");
-                result = MU_FAILURE;
-            }
-            else
-            {
-                if (mqtt_client_publish(transport_data->mqttClient, mqttMsg) != 0)
-                {
-                    LogError("Failed attempting to publish mqtt message");
-                    result = MU_FAILURE;
-                }
-                else
-                {
-                    mqttMsgEntry->retryCount++;
-                    result = 0;
-                }
-            }
-            mqttmessage_destroy(mqttMsg);
-        }
-        STRING_delete(msgTopic);
-    }
-    return result;
+    (void)transport_data;
+    (void)mqttMsgEntry;
+    (void)payload;
+    (void)len;
+    return 1;
+    // int result;
+    // STRING_HANDLE msgTopic = addPropertiesTouMqttMessage(mqttMsgEntry->iotHubMessageEntry->messageHandle, STRING_c_str(transport_data->topic_MqttEvent), transport_data->auto_url_encode_decode);
+    // if (msgTopic == NULL)
+    // {
+    //     LogError("Failed adding properties to mqtt message");
+    //     result = MU_FAILURE;
+    // }
+    // else
+    // {
+    //     MQTT_MESSAGE_HANDLE mqttMsg = mqttmessage_create_in_place(mqttMsgEntry->packet_id, STRING_c_str(msgTopic), DELIVER_AT_LEAST_ONCE, payload, len);
+    //     if (mqttMsg == NULL)
+    //     {
+    //         LogError("Failed creating mqtt message");
+    //         result = MU_FAILURE;
+    //     }
+    //     else
+    //     {
+    //         if (tickcounter_get_current_ms(transport_data->msgTickCounter, &mqttMsgEntry->msgPublishTime) != 0)
+    //         {
+    //             LogError("Failed retrieving tickcounter info");
+    //             result = MU_FAILURE;
+    //         }
+    //         else
+    //         {
+    //             if (mqtt_client_publish(transport_data->mqttClient, mqttMsg) != 0)
+    //             {
+    //                 LogError("Failed attempting to publish mqtt message");
+    //                 result = MU_FAILURE;
+    //             }
+    //             else
+    //             {
+    //                 mqttMsgEntry->retryCount++;
+    //                 result = 0;
+    //             }
+    //         }
+    //         mqttmessage_destroy(mqttMsg);
+    //     }
+    //     STRING_delete(msgTopic);
+    // }
+    // return result;
 }
 
 //
