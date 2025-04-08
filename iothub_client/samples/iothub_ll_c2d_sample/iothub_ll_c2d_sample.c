@@ -51,7 +51,7 @@ static bool g_continueRunning = true;
 static size_t g_message_recv_count = 0;
 
 // Uncomment this define to use Asynchronous ACK of cloud-to-device messages.
-// #define USE_C2D_ASYNC_ACK
+#define USE_C2D_ASYNC_ACK
 
 // Most applications should leave USE_C2D_ASYNC_ACK undefined.
 // The default sample behavior is easier for the application to manage and meets the vast majority of application scenarios.
@@ -292,16 +292,16 @@ int main(void)
 
                 IoTHubDeviceClient_LL_DoWork(device_ll_handle);
 
-#ifdef USE_C2D_ASYNC_ACK
-                // If using delayed acknowledgement of cloud-to-device messages, this function serves as an example of
-                // how to do so for all the previously received messages still present in the list used by this sample.
-                acknowledge_cloud_messages(device_ll_handle);
-#endif
-
                 ThreadAPI_Sleep(10);
 
             } while (g_continueRunning);
         }
+
+        #ifdef USE_C2D_ASYNC_ACK
+        // If using delayed acknowledgement of cloud-to-device messages, this function serves as an example of
+        // how to do so for all the previously received messages still present in the list used by this sample.
+        acknowledge_cloud_messages(device_ll_handle);
+        #endif
 
         // Clean up the iothub sdk handle
         IoTHubDeviceClient_LL_Destroy(device_ll_handle);
